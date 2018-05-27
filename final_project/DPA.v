@@ -63,6 +63,9 @@ reg [5:0]  cr_row_r, cr_row_w;
 reg [5:0]  cr_num;
 reg [23:0] cr_val;
 reg [7:0]  cr_state_r, cr_state_w;
+reg [9:0]  sum_512r_r, sum_512r_w;
+reg [9:0]  sum_512g_r, sum_512g_w;
+reg [9:0]  sum_512b_r, sum_512b_w;
 
 assign #10 IM_A   = im_a_r;
 assign #10 IM_D   = im_d_r;
@@ -92,6 +95,9 @@ always @ (*) begin
   cr_col_w     = cr_col_r;
   cr_row_w     = cr_row_r;
   cr_state_w   = cr_state_r;
+  sum_512r_w   = sum_512r_r;
+  sum_512g_w   = sum_512g_r;
+  sum_512b_w   = sum_512b_r;
 
   hr_w  = hr_r;
   min_w = min_r;
@@ -149,17 +155,21 @@ always @ (*) begin
         cnt_w = 0;
         if (IM_Q == 128) begin
           state_w = S_128B;
+          type_w = 0;
         end else if (IM_Q == 256) begin
           state_w = S_256B;
+          type_w = 1;
         end else begin // IM_Q == 512
           state_w = S_512B;
+          type_w = 2;
         end
-        im_a_w = ph_addr_r + 1;
+        im_a_w = 0;
         im_wen_w = 1;
         fb_a_w = fb_addr_r + 1;
-        ph_a_w = ph_addr_r + 1;
+        ph_a_w = 0;
         iter_w = 0;
         s_cnt_r = 0;
+        cnt_w = 0;
       end
     end
 
@@ -278,17 +288,148 @@ always @ (*) begin
     // 512
     //////////////////////////////
     S_512B: begin
+      if (iter_r >= 128) begin 
+        iter_w = 0;
+        s_cnt_w = 0;
+        cnt_w = 0;
+        im_wen_w = 1;
+        state_w = S_DCLK1;
+        cr_idx_w = 0;
+        cr_row_w = 0;
+        cr_col_w = 0;
+      end else begin
+        s_cnt_w = s_cnt_r + 1;
+        if (s_cnt_r == 0) begin
+          im_a_w = ph_addr_r + 2;
+          im_wen_w = 1;
+          ph_a_w = ph_addr_r + 2;
+          fb_a_r = fb_addr_r + 1;
+        end else if (s_cnt_r == 1) begin
+          sum_512r_w = 0;
+          sum_512g_w = 0;
+          sum_512b_w = 0;
+          im_a_w = ph_a_r + 1;
+          im_wen_w = 1;
+        end else if (s_cnt_r == 2) begin
+          im_a_w = ph_a_r + 512;
+          im_wen_w = 1;
+          sum_512r_w = sum_512r_r + IM_Q[23:16];
+          sum_512g_w = sum_512g_r + IM_Q[15: 8];
+          sum_512b_w = sum_512b_r + IM_Q[ 7: 0];
+        end else if (s_cnt_r == 3) begin
+          im_a_w = ph_a_r + 513;
+          im_wen_w = 1;
+          sum_512r_w = sum_512r_r + IM_Q[23:16];
+          sum_512g_w = sum_512g_r + IM_Q[15: 8];
+          sum_512b_w = sum_512b_r + IM_Q[ 7: 0];
+        end else if (s_cnt_r == 4) begin
+          im_wen_w = 1;
+          sum_512r_w = sum_512r_r + IM_Q[23:16];
+          sum_512g_w = sum_512g_r + IM_Q[15: 8];
+          sum_512b_w = sum_512b_r + IM_Q[ 7: 0];
+        end else if (s_cnt_r == 5) begin
+          im_a_w = fb_a_r;
+          im_wen_w = 0;
+          im_d_w[23:16] = (sum_512r_r + IM_Q[23:16]) >> 2;
+          im_d_w[15: 8] = (sum_512g_r + IM_Q[15: 8]) >> 2;
+          im_d_w[ 7: 0] = (sum_512b_r + IM_Q[ 7: 0]) >> 2;
+          cnt_w = cnt_r + 1;
+          if (cnt_r < 127) begin
+            ph_a_w = ph_a_r + 4;
+            fb_a_w = fb_a_r + 2;
+          end else if (cnt_r == 127) begin
+            ph_a_w = ph_a_r + 514;
+            fb_a_w = fb_a_r + 1;
+          end else if (cnt_r < 255) begin 
+            ph_a_w = ph_a_r + 4;
+            fb_a_w = fb_a_r + 2;
+          end else begin // cnt_r == 255
+            ph_a_w = ph_a_r + 518;
+            fb_a_w = fb_a_r + 3;
+            iter_w = iter_r + 1;
+            cnt_w = 0;
+          end
+        end else if (s_cnt_r == 6) begin
+          s_cnt_w = 1;
+          im_a_w = ph_a_r;
+          im_wen_w = 1;
+        end 
+      end
     end
+
     S_512A: begin
+      if (iter_r >= 128) begin 
+        iter_w = 0;
+        s_cnt_w = 0;
+        cnt_w = 0;
+        im_wen_w = 1;
+        state_w = S_DCLK2;
+        cr_idx_w = 0;
+        cr_row_w = 0;
+        cr_col_w = 0;
+      end else begin
+        s_cnt_w = s_cnt_r + 1;
+        if (s_cnt_r == 0) begin
+          im_a_w = ph_addr_r;
+          im_wen_w = 1;
+          ph_a_w = ph_addr_r;
+          fb_a_r = fb_addr_r;
+        end else if (s_cnt_r == 1) begin
+          sum_512r_w = 0;
+          sum_512g_w = 0;
+          sum_512b_w = 0;
+          im_a_w = ph_a_r + 1;
+          im_wen_w = 1;
+        end else if (s_cnt_r == 2) begin
+          im_a_w = ph_a_r + 512;
+          im_wen_w = 1;
+          sum_512r_w = sum_512r_r + IM_Q[23:16];
+          sum_512g_w = sum_512g_r + IM_Q[15: 8];
+          sum_512b_w = sum_512b_r + IM_Q[ 7: 0];
+        end else if (s_cnt_r == 3) begin
+          im_a_w = ph_a_r + 513;
+          im_wen_w = 1;
+          sum_512r_w = sum_512r_r + IM_Q[23:16];
+          sum_512g_w = sum_512g_r + IM_Q[15: 8];
+          sum_512b_w = sum_512b_r + IM_Q[ 7: 0];
+        end else if (s_cnt_r == 4) begin
+          im_wen_w = 1;
+          sum_512r_w = sum_512r_r + IM_Q[23:16];
+          sum_512g_w = sum_512g_r + IM_Q[15: 8];
+          sum_512b_w = sum_512b_r + IM_Q[ 7: 0];
+        end else if (s_cnt_r == 5) begin
+          im_a_w = fb_a_r;
+          im_wen_w = 0;
+          im_d_w[23:16] = (sum_512r_r + IM_Q[23:16]) >> 2;
+          im_d_w[15: 8] = (sum_512g_r + IM_Q[15: 8]) >> 2;
+          im_d_w[ 7: 0] = (sum_512b_r + IM_Q[ 7: 0]) >> 2;
+          cnt_w = cnt_r + 1;
+          if (cnt_r < 127) begin 
+            ph_a_w = ph_a_r + 4;
+            fb_a_w = fb_a_r + 2;
+          end else if (cnt_r == 127) begin
+            ph_a_w = ph_a_r + 518;
+            fb_a_w = fb_a_r + 3;
+          end else if (cnt_r < 255) begin 
+            ph_a_w = ph_a_r + 4;
+            fb_a_w = fb_a_r + 2;
+          end else begin // cnt_r == 255
+            ph_a_w = ph_a_r + 514;
+            fb_a_w = fb_a_r + 1;
+            iter_w = iter_r + 1;
+            cnt_w = 0;
+          end
+        end else if (s_cnt_r == 6) begin
+          s_cnt_w = 1;
+          im_a_w = ph_a_r;
+          im_wen_w = 1;
+        end
+      end
     end
 
     //////////////////////////////
     // DClk
     //////////////////////////////
-    S_DCLK: begin
-      
-    end
-    
     S_DCLK1: begin
       if (cr_idx_r < 8) begin
         if (cr_row_r < 24) begin
@@ -325,11 +466,12 @@ always @ (*) begin
         cr_idx_w = 0;
         cr_row_w = 0;
         cr_col_w = 0;
+        cr_state_w = 0;
         state_w = S_WAIT1;
       end
     end
 
-    S_DCLK2: begin     
+    S_DCLK2: begin
       if (cr_idx_r < 8) begin
         if (cr_row_r < 24) begin
           if (cr_state_r == 0) begin
@@ -365,6 +507,7 @@ always @ (*) begin
         cr_idx_w = 0;
         cr_row_w = 0;
         cr_col_w = 0;
+        cr_state_w = 0;
         state_w = S_WAIT2;
       end
     end
@@ -416,7 +559,13 @@ always @ (*) begin
     //////////////////////////////
     S_WAIT1: begin
       if (cycle_cnt_r >= CYCLE_0_2) begin
-        state_w = S_256A;
+        if (type_r == 0) begin
+          state_w = S_128A;
+        end else if (type_r == 1) begin
+          state_w = S_256A;
+        end else begin 
+          state_w = S_512A;
+        end 
         im_wen_w = 1;
         im_a_w = ph_addr_r;
         ph_a_w = ph_addr_r;
@@ -452,6 +601,7 @@ always @ (*) begin
     S_WAIT5: begin
       if (cycle_cnt_r >= CYCLE_2_0 - 1) begin
         state_w = S_TYPE;
+        ph_cnt_w = (ph_cnt_r >= ph_num_r - 1) ? 0 : ph_cnt_r + 1; 
       end
     end
 
@@ -481,6 +631,9 @@ always @ (posedge clk or posedge reset) begin
     cr_col_r      <= 0;
     cr_row_r      <= 0;
     cr_state_r    <= 0;
+    sum_512r_r    <= 0;
+    sum_512g_r    <= 0;
+    sum_512b_r    <= 0;
   end else begin
     cnt_r         <= cnt_w;
     fb_addr_r     <= fb_addr_w;
@@ -500,6 +653,9 @@ always @ (posedge clk or posedge reset) begin
     cr_col_r      <= cr_col_w;
     cr_row_r      <= cr_row_w;
     cr_state_r    <= cr_state_w;
+    sum_512r_r    <= sum_512r_w;
+    sum_512g_r    <= sum_512g_w;
+    sum_512b_r    <= sum_512b_w;
   end
 end
 
