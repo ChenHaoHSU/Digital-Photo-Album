@@ -101,7 +101,11 @@ always @ (*) begin
 
   hr_w  = hr_r;
   min_w = min_r;
-  sec_w = (cycle_cnt_r == CYCLE_1_0 - 1) ? sec_r + 1 : sec_r;
+  if (cycle_cnt_r == CYCLE_1_0 - 1 || cycle_cnt_r == CYCLE_2_0 - 1) begin
+    sec_w = sec_r + 1;
+  end else begin
+    sec_w = sec_r;
+  end 
   if (sec_r >= 60) begin
     sec_w = 0;
     min_w = min_r + 1;
@@ -434,7 +438,7 @@ always @ (*) begin
       if (cr_idx_r < 8) begin
         if (cr_row_r < 24) begin
           if (cr_state_r == 0) begin
-            im_a_w = (fb_addr_r + 59544) + cr_idx_r * 13 + 256 * cr_row_r;
+            im_a_w = (fb_addr_r + 59543) + (cr_idx_r * 13) + (256 * cr_row_r);
             cr_a_w = 24 * cr_num + cr_row_r;
             cr_state_w = cr_state_r + 1;
             im_wen_w = 1;
@@ -443,7 +447,7 @@ always @ (*) begin
             im_wen_w = 1;
           end else begin 
             cr_col_w = cr_col_r + 1;
-            if (cr_col_r < 11) begin
+            if (cr_col_r < 13) begin
               im_a_w = im_a_r + 1;
               im_d_w = cr_val;
               im_wen_w = 0;
