@@ -172,7 +172,7 @@ always @ (*) begin
         fb_a_w = fb_addr_r + 1;
         ph_a_w = 0;
         iter_w = 0;
-        s_cnt_r = 0;
+        s_cnt_w = 0;
         cnt_w = 0;
       end
     end
@@ -195,7 +195,7 @@ always @ (*) begin
         if (s_cnt_r == 0) begin
           im_a_w = ph_addr_r + 1;
           ph_a_w = ph_addr_r + 1;
-          fb_a_r = fb_addr_r + 1;
+          fb_a_w = fb_addr_r + 1;
         end else if (s_cnt_r == 1) begin
         end else if (s_cnt_r == 2) begin
           im_d_w = IM_Q;
@@ -245,7 +245,7 @@ always @ (*) begin
         if (s_cnt_r == 0) begin
           im_a_w = ph_addr_r;
           ph_a_w = ph_addr_r;
-          fb_a_r = fb_addr_r;
+          fb_a_w = fb_addr_r;
         end else if (s_cnt_r == 1) begin
         end else if (s_cnt_r == 2) begin
           im_d_w = IM_Q;
@@ -307,7 +307,7 @@ always @ (*) begin
           im_a_w = ph_addr_r + 2;
           im_wen_w = 1;
           ph_a_w = ph_addr_r + 2;
-          fb_a_r = fb_addr_r + 1;
+          fb_a_w = fb_addr_r + 1;
         end else if (s_cnt_r == 1) begin
           sum_512r_w = 0;
           sum_512g_w = 0;
@@ -377,7 +377,7 @@ always @ (*) begin
           im_a_w = ph_addr_r;
           im_wen_w = 1;
           ph_a_w = ph_addr_r;
-          fb_a_r = fb_addr_r;
+          fb_a_w = fb_addr_r;
         end else if (s_cnt_r == 1) begin
           sum_512r_w = 0;
           sum_512g_w = 0;
