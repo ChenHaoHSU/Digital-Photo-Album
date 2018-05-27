@@ -30,6 +30,9 @@ parameter [5:0] S_WAIT2 = 6'd10; // 0.2 ~ 0.4 (Photo 2)
 parameter [5:0] S_WAIT3 = 6'd11; // 0.4 ~ 1.0 (Photo 2)
 parameter [5:0] S_WAIT4 = 6'd12; // 1.0 ~ 1.4 (Photo 2)
 parameter [5:0] S_WAIT5 = 6'd13; // 1.4 ~ 2.0 (Photo 2)
+parameter [5:0] S_DCLK1 = 6'd14;
+parameter [5:0] S_DCLK2 = 6'd15;
+parameter [5:0] S_DCLK4 = 6'd16;
 
 // Signals
 reg [31:0] cycle_cnt_r, cycle_cnt_w;
@@ -43,16 +46,28 @@ reg [31:0] cnt_r, cnt_w;
 reg [31:0] ph_cnt_r, ph_cnt_w;    // current photo idx
 reg [31:0] px_cnt_r, px_cnt_w;    // current pixel idx
 reg [19:0] im_a_r, im_a_w;
-reg [19:0] im_d_r, im_d_w;
+reg [23:0] im_d_r, im_d_w;
 reg        im_wen_r, im_wen_w;
 reg [15:0] iter_r, iter_w;
 reg [19:0] fb_a_r, fb_a_w;        // current write addr 
 reg [19:0] ph_a_r, ph_a_w;        // current photo addr
-reg [3:0]  s_cnt_r, s_cnt_w;
+reg [7:0]  s_cnt_r, s_cnt_w;
+reg [3:0]  h1, h0;
+reg [3:0]  m1, m0;
+reg [3:0]  s1, s0;
+reg [8:0]  cr_a_r, cr_a_w;
+reg [19:0] tm_a_r, tm_a_w;
+reg [5:0]  cr_idx_r, cr_idx_w;
+reg [5:0]  cr_col_r, cr_col_w;
+reg [5:0]  cr_row_r, cr_row_w;
+reg [5:0]  cr_num;
+reg [23:0] cr_val;
+reg [7:0]  cr_state_r, cr_state_w;
 
-assign #10IM_A   = im_a_r;
-assign #10IM_D   = im_d_r;
-assign #10IM_WEN = im_wen_r;
+assign #10 IM_A   = im_a_r;
+assign #10 IM_D   = im_d_r;
+assign #10 IM_WEN = im_wen_r;
+assign #10 CR_A   = cr_a_r;
 
 always @ (*) begin
   state_w      = state_r;
@@ -71,6 +86,28 @@ always @ (*) begin
   ph_a_w       = ph_a_r;
   s_cnt_w      = s_cnt_r;
   {hr_w, min_w, sec_w} = {hr_r, min_r, sec_r};
+  cr_a_w       = cr_a_r;
+  tm_a_w       = tm_a_r;
+  cr_idx_w     = cr_idx_r;
+  cr_col_w     = cr_col_r;
+  cr_row_w     = cr_row_r;
+  cr_state_w   = cr_state_r;
+
+  hr_w  = hr_r;
+  min_w = min_r;
+  sec_w = (cycle_cnt_r == CYCLE_1_0 - 1) ? sec_r + 1 : sec_r;
+  if (sec_r >= 60) begin
+    sec_w = 0;
+    min_w = min_r + 1;
+  end
+  if (min_r >= 60) begin
+    min_w = 0;
+    hr_w = hr_r + 1;
+  end
+  if (hr_r >= 24) begin
+    hr_w = 0;
+  end
+
 
   case (state_r)
     //////////////////////////////
@@ -135,7 +172,10 @@ always @ (*) begin
         s_cnt_w = 0;
         cnt_w = 0;
         im_wen_w = 1;
-        state_w = S_WAIT1;
+        state_w = S_DCLK1;
+        cr_idx_w = 0;
+        cr_row_w = 0;
+        cr_col_w = 0;
       end else begin
         s_cnt_w = s_cnt_r + 1;
         if (s_cnt_r == 0) begin
@@ -182,7 +222,10 @@ always @ (*) begin
         s_cnt_w = 0;
         cnt_w = 0;
         im_wen_w = 1;
-        state_w = S_WAIT2;
+        state_w = S_DCLK2;
+        cr_idx_w = 0;
+        cr_row_w = 0;
+        cr_col_w = 0;
       end else begin
         s_cnt_w = s_cnt_r + 1;
         if (s_cnt_r == 0) begin
@@ -243,6 +286,129 @@ always @ (*) begin
     // DClk
     //////////////////////////////
     S_DCLK: begin
+      
+    end
+    
+    S_DCLK1: begin
+      if (cr_idx_r < 8) begin
+        if (cr_row_r < 24) begin
+          if (cr_state_r == 0) begin
+            im_a_w = (fb_addr_r + 59544) + cr_idx_r * 13 + 256 * cr_row_r;
+            cr_a_w = 24 * cr_num + cr_row_r;
+            cr_state_w = cr_state_r + 1;
+            im_wen_w = 1;
+          end else if (cr_state_r == 1) begin
+            cr_state_w = cr_state_r + 1;
+            im_wen_w = 1;
+          end else begin 
+            cr_col_w = cr_col_r + 1;
+            if (cr_col_r < 11) begin
+              im_a_w = im_a_r + 1;
+              im_d_w = cr_val;
+              im_wen_w = 0;
+            end else begin
+              im_wen_w = 1;
+              cr_state_w = 0;
+              cr_col_w = 0;
+              cr_row_w = cr_row_r + 1;
+            end
+          end 
+        end else begin
+          cr_state_w = 0;
+          cr_col_w = 0;
+          cr_row_w = 0;
+          cr_idx_w = cr_idx_r + 1;
+          im_wen_w = 1;
+        end
+      end else begin
+        im_wen_w = 1;
+        cr_idx_w = 0;
+        cr_row_w = 0;
+        cr_col_w = 0;
+        state_w = S_WAIT1;
+      end
+    end
+
+    S_DCLK2: begin     
+      if (cr_idx_r < 8) begin
+        if (cr_row_r < 24) begin
+          if (cr_state_r == 0) begin
+            im_a_w = (fb_addr_r + 59543) + (cr_idx_r * 13) + (256 * cr_row_r);
+            cr_a_w = 24 * cr_num + cr_row_r;
+            cr_state_w = cr_state_r + 1;
+            im_wen_w = 1;
+          end else if (cr_state_r == 1) begin
+            cr_state_w = cr_state_r + 1;
+            im_wen_w = 1;
+          end else begin
+            cr_col_w = cr_col_r + 1;
+            if (cr_col_r < 13) begin
+              im_a_w = im_a_r + 1;
+              im_d_w = cr_val;
+              im_wen_w = 0;
+            end else begin
+              im_wen_w = 1;
+              cr_state_w = 0;
+              cr_col_w = 0;
+              cr_row_w = cr_row_r + 1;
+            end
+          end 
+        end else begin
+          cr_state_w = 0;
+          cr_col_w = 0;
+          cr_row_w = 0;
+          cr_idx_w = cr_idx_r + 1;
+          im_wen_w = 1;
+        end
+      end else begin
+        im_wen_w = 1;
+        cr_idx_w = 0;
+        cr_row_w = 0;
+        cr_col_w = 0;
+        state_w = S_WAIT2;
+      end
+    end
+    
+    S_DCLK4: begin
+      if (cycle_cnt_r >= CYCLE_1_0 + 100) begin 
+        if (cr_idx_r < 8) begin
+          if (cr_row_r < 24) begin
+            if (cr_state_r == 0) begin
+              im_a_w = (fb_addr_r + 59543) + (cr_idx_r * 13) + (256 * cr_row_r);
+              cr_a_w = 24 * cr_num + cr_row_r;
+              cr_state_w = cr_state_r + 1;
+              im_wen_w = 1;
+            end else if (cr_state_r == 1) begin
+              cr_state_w = cr_state_r + 1;
+              im_wen_w = 1;
+            end else begin
+              cr_col_w = cr_col_r + 1;
+              if (cr_col_r < 13) begin
+                im_a_w = im_a_r + 1;
+                im_d_w = cr_val;
+                im_wen_w = 0;
+              end else begin
+                im_wen_w = 1;
+                cr_state_w = 0;
+                cr_col_w = 0;
+                cr_row_w = cr_row_r + 1;
+              end
+            end 
+          end else begin
+            cr_state_w = 0;
+            cr_col_w = 0;
+            cr_row_w = 0;
+            cr_idx_w = cr_idx_r + 1;
+            im_wen_w = 1;
+          end
+        end else begin
+          im_wen_w = 1;
+          cr_idx_w = 0;
+          cr_row_w = 0;
+          cr_col_w = 0;
+          state_w = S_WAIT4;
+        end
+      end
     end
 
     //////////////////////////////
@@ -260,29 +426,40 @@ always @ (*) begin
         iter_w = 0;
       end
     end
+
     S_WAIT2: begin
       if (cycle_cnt_r >= CYCLE_0_4) begin
         state_w = S_WAIT3;
       end
     end
+
     S_WAIT3: begin
+      if (cycle_cnt_r >= CYCLE_1_0) begin
+        state_w = S_DCLK4;
+      end
     end
+
     S_WAIT4: begin
+      if (cycle_cnt_r >= CYCLE_1_4) begin
+        state_w = S_WAIT5;
+        im_wen_w = 1;
+        cr_idx_w = 0;
+        cr_row_w = 0;
+        cr_col_w = 0;
+      end
     end
+
     S_WAIT5: begin
+      if (cycle_cnt_r >= CYCLE_2_0 - 1) begin
+        state_w = S_TYPE;
+      end
     end
 
     default: begin 
     end
   endcase
+
 end
-
-
-// always @(im_a_r or im_d_r or im_wen_r or reg_256_r) begin
-//   if (im_wen_r == 0 && im_a_r == 20'he0001) begin
-//     $display("HERE, addr = %h, reg = %h", im_a_r, reg_256_r);
-//   end
-// end 
     
 always @ (posedge clk or posedge reset) begin
   if (reset) begin 
@@ -298,6 +475,12 @@ always @ (posedge clk or posedge reset) begin
     fb_a_r        <= 0;
     ph_a_r        <= 0;
     s_cnt_r       <= 0;
+    cr_a_r        <= 0;
+    tm_a_r        <= 0;
+    cr_idx_r      <= 0;
+    cr_col_r      <= 0;
+    cr_row_r      <= 0;
+    cr_state_r    <= 0;
   end else begin
     cnt_r         <= cnt_w;
     fb_addr_r     <= fb_addr_w;
@@ -311,6 +494,12 @@ always @ (posedge clk or posedge reset) begin
     fb_a_r        <= fb_a_w;
     ph_a_r        <= ph_a_w;
     s_cnt_r       <= s_cnt_w;
+    cr_a_r        <= cr_a_w;
+    tm_a_r        <= tm_a_w;
+    cr_idx_r      <= cr_idx_w;
+    cr_col_r      <= cr_col_w;
+    cr_row_r      <= cr_row_w;
+    cr_state_r    <= cr_state_w;
   end
 end
 
@@ -344,23 +533,202 @@ end
 //////////////////////////////
 // Digital Clock
 //////////////////////////////
+always @ (*) begin
+  case (cr_idx_r) 
+    6'd0: cr_num = h1;
+    6'd1: cr_num = h0;
+    6'd2: cr_num = 10;
+    6'd3: cr_num = m1;
+    6'd4: cr_num = m0;
+    6'd5: cr_num = 10;
+    6'd6: cr_num = s1;
+    6'd7: cr_num = s0;
+    default: cr_num = 0;
+  endcase
+end 
 
-// always @ (*) begin
-//   hr_w  = hr_r;
-//   min_w = min_r;
-//   sec_w = (cycle_cnt_r == CYCLE_2_0 - 1) ? sec_r + 1 : sec_r;
-//   if (sec_r >= 60) begin
-//     sec_w = 0;
-//     min_w = min_r + 1;
-//   end
-//   if (min_r >= 60) begin
-//     min_w = 0;
-//     hr_w = min_r + 1;
-//   end
-//   if (min_r >= 24) begin
-//     hr_w = 0;
-//   end
-// end
+always @ (*) begin
+  if (cr_col_r < 13) begin
+    cr_val = CR_Q[12-cr_col_r] ? 24'hffffff : 24'h000000;
+  end else begin 
+    cr_val = 0;
+  end
+end
+
+always @ (*) begin
+  case (hr_r)
+    8'd00:    {h1, h0} = {4'd0, 4'd0};
+    8'd01:    {h1, h0} = {4'd0, 4'd1};
+    8'd02:    {h1, h0} = {4'd0, 4'd2};
+    8'd03:    {h1, h0} = {4'd0, 4'd3};
+    8'd04:    {h1, h0} = {4'd0, 4'd4};
+    8'd05:    {h1, h0} = {4'd0, 4'd5};
+    8'd06:    {h1, h0} = {4'd0, 4'd6};
+    8'd07:    {h1, h0} = {4'd0, 4'd7};
+    8'd08:    {h1, h0} = {4'd0, 4'd8};
+    8'd09:    {h1, h0} = {4'd0, 4'd9};
+
+    8'd10:    {h1, h0} = {4'd1, 4'd0};
+    8'd11:    {h1, h0} = {4'd1, 4'd1};
+    8'd12:    {h1, h0} = {4'd1, 4'd2};
+    8'd13:    {h1, h0} = {4'd1, 4'd3};
+    8'd14:    {h1, h0} = {4'd1, 4'd4};
+    8'd15:    {h1, h0} = {4'd1, 4'd5};
+    8'd16:    {h1, h0} = {4'd1, 4'd6};
+    8'd17:    {h1, h0} = {4'd1, 4'd7};
+    8'd18:    {h1, h0} = {4'd1, 4'd8};
+    8'd19:    {h1, h0} = {4'd1, 4'd9};
+
+    8'd20:    {h1, h0} = {4'd2, 4'd0};
+    8'd21:    {h1, h0} = {4'd2, 4'd1};
+    8'd22:    {h1, h0} = {4'd2, 4'd2};
+    8'd23:    {h1, h0} = {4'd2, 4'd3};
+    default:  {h1, h0} = {4'd0, 4'd0};
+  endcase
+end
+
+always @ (*) begin
+  case (min_r)
+    8'd00:    {m1, m0} = {4'd0, 4'd0};
+    8'd01:    {m1, m0} = {4'd0, 4'd1};
+    8'd02:    {m1, m0} = {4'd0, 4'd2};
+    8'd03:    {m1, m0} = {4'd0, 4'd3};
+    8'd04:    {m1, m0} = {4'd0, 4'd4};
+    8'd05:    {m1, m0} = {4'd0, 4'd5};
+    8'd06:    {m1, m0} = {4'd0, 4'd6};
+    8'd07:    {m1, m0} = {4'd0, 4'd7};
+    8'd08:    {m1, m0} = {4'd0, 4'd8};
+    8'd09:    {m1, m0} = {4'd0, 4'd9};
+
+    8'd10:    {m1, m0} = {4'd1, 4'd0};
+    8'd11:    {m1, m0} = {4'd1, 4'd1};
+    8'd12:    {m1, m0} = {4'd1, 4'd2};
+    8'd13:    {m1, m0} = {4'd1, 4'd3};
+    8'd14:    {m1, m0} = {4'd1, 4'd4};
+    8'd15:    {m1, m0} = {4'd1, 4'd5};
+    8'd16:    {m1, m0} = {4'd1, 4'd6};
+    8'd17:    {m1, m0} = {4'd1, 4'd7};
+    8'd18:    {m1, m0} = {4'd1, 4'd8};
+    8'd19:    {m1, m0} = {4'd1, 4'd9};
+
+    8'd20:    {m1, m0} = {4'd2, 4'd0};
+    8'd21:    {m1, m0} = {4'd2, 4'd1};
+    8'd22:    {m1, m0} = {4'd2, 4'd2};
+    8'd23:    {m1, m0} = {4'd2, 4'd3};
+    8'd24:    {m1, m0} = {4'd2, 4'd4};
+    8'd25:    {m1, m0} = {4'd2, 4'd5};
+    8'd26:    {m1, m0} = {4'd2, 4'd6};
+    8'd27:    {m1, m0} = {4'd2, 4'd7};
+    8'd28:    {m1, m0} = {4'd2, 4'd8};
+    8'd29:    {m1, m0} = {4'd2, 4'd9};
+
+    8'd30:    {m1, m0} = {4'd3, 4'd0};
+    8'd31:    {m1, m0} = {4'd3, 4'd1};
+    8'd32:    {m1, m0} = {4'd3, 4'd2};
+    8'd33:    {m1, m0} = {4'd3, 4'd3};
+    8'd34:    {m1, m0} = {4'd3, 4'd4};
+    8'd35:    {m1, m0} = {4'd3, 4'd5};
+    8'd36:    {m1, m0} = {4'd3, 4'd6};
+    8'd37:    {m1, m0} = {4'd3, 4'd7};
+    8'd38:    {m1, m0} = {4'd3, 4'd8};
+    8'd39:    {m1, m0} = {4'd3, 4'd9};
+
+    8'd40:    {m1, m0} = {4'd4, 4'd0};
+    8'd41:    {m1, m0} = {4'd4, 4'd1};
+    8'd42:    {m1, m0} = {4'd4, 4'd2};
+    8'd43:    {m1, m0} = {4'd4, 4'd3};
+    8'd44:    {m1, m0} = {4'd4, 4'd4};
+    8'd45:    {m1, m0} = {4'd4, 4'd5};
+    8'd46:    {m1, m0} = {4'd4, 4'd6};
+    8'd47:    {m1, m0} = {4'd4, 4'd7};
+    8'd48:    {m1, m0} = {4'd4, 4'd8};
+    8'd49:    {m1, m0} = {4'd4, 4'd9};
+
+    8'd50:    {m1, m0} = {4'd5, 4'd0};
+    8'd51:    {m1, m0} = {4'd5, 4'd1};
+    8'd52:    {m1, m0} = {4'd5, 4'd2};
+    8'd53:    {m1, m0} = {4'd5, 4'd3};
+    8'd54:    {m1, m0} = {4'd5, 4'd4};
+    8'd55:    {m1, m0} = {4'd5, 4'd5};
+    8'd56:    {m1, m0} = {4'd5, 4'd6};
+    8'd57:    {m1, m0} = {4'd5, 4'd7};
+    8'd58:    {m1, m0} = {4'd5, 4'd8};
+    8'd59:    {m1, m0} = {4'd5, 4'd9};
+    default:  {m1, m0} = {4'd0, 4'd0};
+  endcase
+end
+
+always @ (*) begin
+  case (sec_r)
+    8'd00:    {s1, s0} = {4'd0, 4'd0};
+    8'd01:    {s1, s0} = {4'd0, 4'd1};
+    8'd02:    {s1, s0} = {4'd0, 4'd2};
+    8'd03:    {s1, s0} = {4'd0, 4'd3};
+    8'd04:    {s1, s0} = {4'd0, 4'd4};
+    8'd05:    {s1, s0} = {4'd0, 4'd5};
+    8'd06:    {s1, s0} = {4'd0, 4'd6};
+    8'd07:    {s1, s0} = {4'd0, 4'd7};
+    8'd08:    {s1, s0} = {4'd0, 4'd8};
+    8'd09:    {s1, s0} = {4'd0, 4'd9};
+
+    8'd10:    {s1, s0} = {4'd1, 4'd0};
+    8'd11:    {s1, s0} = {4'd1, 4'd1};
+    8'd12:    {s1, s0} = {4'd1, 4'd2};
+    8'd13:    {s1, s0} = {4'd1, 4'd3};
+    8'd14:    {s1, s0} = {4'd1, 4'd4};
+    8'd15:    {s1, s0} = {4'd1, 4'd5};
+    8'd16:    {s1, s0} = {4'd1, 4'd6};
+    8'd17:    {s1, s0} = {4'd1, 4'd7};
+    8'd18:    {s1, s0} = {4'd1, 4'd8};
+    8'd19:    {s1, s0} = {4'd1, 4'd9};
+
+    8'd20:    {s1, s0} = {4'd2, 4'd0};
+    8'd21:    {s1, s0} = {4'd2, 4'd1};
+    8'd22:    {s1, s0} = {4'd2, 4'd2};
+    8'd23:    {s1, s0} = {4'd2, 4'd3};
+    8'd24:    {s1, s0} = {4'd2, 4'd4};
+    8'd25:    {s1, s0} = {4'd2, 4'd5};
+    8'd26:    {s1, s0} = {4'd2, 4'd6};
+    8'd27:    {s1, s0} = {4'd2, 4'd7};
+    8'd28:    {s1, s0} = {4'd2, 4'd8};
+    8'd29:    {s1, s0} = {4'd2, 4'd9};
+
+    8'd30:    {s1, s0} = {4'd3, 4'd0};
+    8'd31:    {s1, s0} = {4'd3, 4'd1};
+    8'd32:    {s1, s0} = {4'd3, 4'd2};
+    8'd33:    {s1, s0} = {4'd3, 4'd3};
+    8'd34:    {s1, s0} = {4'd3, 4'd4};
+    8'd35:    {s1, s0} = {4'd3, 4'd5};
+    8'd36:    {s1, s0} = {4'd3, 4'd6};
+    8'd37:    {s1, s0} = {4'd3, 4'd7};
+    8'd38:    {s1, s0} = {4'd3, 4'd8};
+    8'd39:    {s1, s0} = {4'd3, 4'd9};
+
+    8'd40:    {s1, s0} = {4'd4, 4'd0};
+    8'd41:    {s1, s0} = {4'd4, 4'd1};
+    8'd42:    {s1, s0} = {4'd4, 4'd2};
+    8'd43:    {s1, s0} = {4'd4, 4'd3};
+    8'd44:    {s1, s0} = {4'd4, 4'd4};
+    8'd45:    {s1, s0} = {4'd4, 4'd5};
+    8'd46:    {s1, s0} = {4'd4, 4'd6};
+    8'd47:    {s1, s0} = {4'd4, 4'd7};
+    8'd48:    {s1, s0} = {4'd4, 4'd8};
+    8'd49:    {s1, s0} = {4'd4, 4'd9};
+
+    8'd50:    {s1, s0} = {4'd5, 4'd0};
+    8'd51:    {s1, s0} = {4'd5, 4'd1};
+    8'd52:    {s1, s0} = {4'd5, 4'd2};
+    8'd53:    {s1, s0} = {4'd5, 4'd3};
+    8'd54:    {s1, s0} = {4'd5, 4'd4};
+    8'd55:    {s1, s0} = {4'd5, 4'd5};
+    8'd56:    {s1, s0} = {4'd5, 4'd6};
+    8'd57:    {s1, s0} = {4'd5, 4'd7};
+    8'd58:    {s1, s0} = {4'd5, 4'd8};
+    8'd59:    {s1, s0} = {4'd5, 4'd9};
+
+    default:  {s1, s0} = {4'd0, 4'd0};
+  endcase
+end
 
 always @ (posedge clk or posedge reset) begin
   if (reset) begin 
