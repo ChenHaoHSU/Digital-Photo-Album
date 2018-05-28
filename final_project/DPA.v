@@ -18,21 +18,22 @@ parameter [31:0] CYCLE_2_0 = 32'd2000000;
 // FSM
 parameter [5:0] S_INIT  = 6'd0;
 parameter [5:0] S_TYPE  = 6'd1;
-parameter [5:0] S_128A  = 6'd2; // DO B, then do A (see spec)
-parameter [5:0] S_128B  = 6'd3; // DO B, then do A (see spec)
-parameter [5:0] S_256A  = 6'd4; // DO B, then do A (see spec)
-parameter [5:0] S_256B  = 6'd5; // DO B, then do A (see spec)
-parameter [5:0] S_512A  = 6'd6; // DO B, then do A (see spec)
-parameter [5:0] S_512B  = 6'd7; // DO B, then do A (see spec)
-parameter [5:0] S_DCLK  = 6'd8;
-parameter [5:0] S_WAIT1 = 6'd9;  // 0.0 ~ 0.2 (Photo 1 & Photo 2)
-parameter [5:0] S_WAIT2 = 6'd10; // 0.2 ~ 0.4 (Photo 2)
-parameter [5:0] S_WAIT3 = 6'd11; // 0.4 ~ 1.0 (Photo 2)
-parameter [5:0] S_WAIT4 = 6'd12; // 1.0 ~ 1.4 (Photo 2)
-parameter [5:0] S_WAIT5 = 6'd13; // 1.4 ~ 2.0 (Photo 2)
-parameter [5:0] S_DCLK1 = 6'd14;
-parameter [5:0] S_DCLK2 = 6'd15;
-parameter [5:0] S_DCLK4 = 6'd16;
+parameter [5:0] S_128A  = 6'd2;  // DO B, then do A (see spec)
+parameter [5:0] S_128BH = 6'd3;  // DO B, then do A (see spec)
+parameter [5:0] S_128BV = 6'd4;  // DO B, then do A (see spec)
+parameter [5:0] S_256A  = 6'd5;  // DO B, then do A (see spec)
+parameter [5:0] S_256B  = 6'd6;  // DO B, then do A (see spec)
+parameter [5:0] S_512A  = 6'd7;  // DO B, then do A (see spec)
+parameter [5:0] S_512B  = 6'd8;  // DO B, then do A (see spec)
+parameter [5:0] S_DCLK  = 6'd9;
+parameter [5:0] S_WAIT1 = 6'd10; // 0.0 ~ 0.2 (Photo 1 & Photo 2)
+parameter [5:0] S_WAIT2 = 6'd11; // 0.2 ~ 0.4 (Photo 2)
+parameter [5:0] S_WAIT3 = 6'd12; // 0.4 ~ 1.0 (Photo 2)
+parameter [5:0] S_WAIT4 = 6'd13; // 1.0 ~ 1.4 (Photo 2)
+parameter [5:0] S_WAIT5 = 6'd14; // 1.4 ~ 2.0 (Photo 2)
+parameter [5:0] S_DCLK1 = 6'd15;
+parameter [5:0] S_DCLK2 = 6'd16;
+parameter [5:0] S_DCLK4 = 6'd17;
 
 // Signals
 reg [31:0] cycle_cnt_r, cycle_cnt_w;
@@ -66,7 +67,15 @@ reg [7:0]  cr_state_r, cr_state_w;
 reg [9:0]  sum_512r_r, sum_512r_w;
 reg [9:0]  sum_512g_r, sum_512g_w;
 reg [9:0]  sum_512b_r, sum_512b_w;
-
+reg [23:0] reg_128_r, reg_128_w;
+reg [23:0] reg_128_1_r, reg_128_1_w; //    1  |  2   
+reg [23:0] reg_128_2_r, reg_128_2_w; //  -----------               
+reg [23:0] reg_128_3_r, reg_128_3_w; //    3  |  4  
+reg [23:0] reg_128_4_r, reg_128_4_w; //
+reg [7:0]  reg_128r_r, reg_128r_w;    
+reg [7:0]  reg_128g_r, reg_128g_w;    
+reg [7:0]  reg_128b_r, reg_128b_w;    
+ 
 assign #10 IM_A   = im_a_r;
 assign #10 IM_D   = im_d_r;
 assign #10 IM_WEN = im_wen_r;
@@ -98,6 +107,14 @@ always @ (*) begin
   sum_512r_w   = sum_512r_r;
   sum_512g_w   = sum_512g_r;
   sum_512b_w   = sum_512b_r;
+  reg_128_w    = reg_128_r;
+  reg_128_1_w  = reg_128_1_r;
+  reg_128_2_w  = reg_128_2_r;
+  reg_128_3_w  = reg_128_3_r;
+  reg_128_4_w  = reg_128_4_r;
+  reg_128r_w   = reg_128r_r;
+  reg_128g_w   = reg_128g_r;
+  reg_128b_w   = reg_128b_r;
 
   hr_w  = hr_r;
   min_w = min_r;
@@ -158,7 +175,7 @@ always @ (*) begin
       end else if (cnt_r == 3) begin
         cnt_w = 0;
         if (IM_Q == 128) begin
-          state_w = S_128B;
+          state_w = S_128BH;
           type_w = 0;
         end else if (IM_Q == 256) begin
           state_w = S_256B;
@@ -283,9 +300,228 @@ always @ (*) begin
     //////////////////////////////
     // 128
     //////////////////////////////
-    S_128B: begin
+    S_128BH: begin
+      if (iter_r >= 128) begin
+        state_w = S_128BV;
+        iter_w = 0;
+        s_cnt_w = 0;
+        cnt_w = 0;
+        im_wen_w = 1;
+      end else begin 
+        s_cnt_w = s_cnt_r + 1;
+        if (s_cnt_r == 0) begin
+          im_a_w = ph_addr_r;
+          im_wen_w = 1;
+          ph_a_w = ph_addr_r;
+          fb_a_w = fb_addr_r + 1;
+        end else if (s_cnt_r == 1) begin
+          im_a_w = im_a_r + 1;
+          im_wen_w = 1;
+        end else if (s_cnt_r == 2) begin
+          reg_128_w = IM_Q;
+          im_wen_w = 1;
+        end else if (s_cnt_r == 3) begin 
+          cnt_w = cnt_r + 1;
+          if (cnt_r < 127) begin
+            reg_128_w = IM_Q;
+            ph_a_w = ph_a_r + 1;
+            fb_a_w = fb_a_r + 2;
+            im_a_w = fb_a_r;
+            im_wen_w = 0;
+            im_d_w[23:16] = ({2'b00, reg_128_r[23:16]} + {2'b00, IM_Q[23:16]}) >> 1;
+            im_d_w[15: 8] = ({2'b00, reg_128_r[15: 8]} + {2'b00, IM_Q[15: 8]}) >> 1;
+            im_d_w[ 7: 0] = ({2'b00, reg_128_r[ 7: 0]} + {2'b00, IM_Q[ 7: 0]}) >> 1;
+          end else begin // cnt_r == 128
+            im_a_w = fb_a_r;
+            im_wen_w = 0;
+            im_d_w = reg_128_r;
+            ph_a_w = ph_a_r + 1;
+            fb_a_w = fb_a_r + 256 + 2;
+            iter_w = iter_r + 1;
+            cnt_w = 0;
+          end
+        end else if (s_cnt_r == 4) begin 
+          s_cnt_w = 1;
+          im_a_w = ph_a_r;
+          im_wen_w = 1;
+        end
+      end 
     end
+
+    S_128BV: begin
+      if (iter_r >= 128) begin
+        state_w = S_DCLK1;
+        // state_w = S_DCLK2; // rm
+        iter_w = 0;
+        s_cnt_w = 0;
+        cnt_w = 0;
+        im_wen_w = 1;
+        cr_idx_w = 0;
+        cr_row_w = 0;
+        cr_col_w = 0;
+      end else begin 
+        s_cnt_w = s_cnt_r + 1;
+        if (s_cnt_r == 0) begin
+          im_a_w = ph_addr_r;
+          im_wen_w = 1;
+          ph_a_w = ph_addr_r;
+          fb_a_w = fb_addr_r + 256;
+        end else if (s_cnt_r == 1) begin
+          im_a_w = im_a_r + 128;
+          im_wen_w = 1;
+        end else if (s_cnt_r == 2) begin
+          reg_128_w = IM_Q;
+          im_wen_w = 1;
+        end else if (s_cnt_r == 3) begin 
+          cnt_w = cnt_r + 1;
+          if (cnt_r < 127) begin
+            reg_128_w = IM_Q;
+            ph_a_w = ph_a_r + 128;
+            fb_a_w = fb_a_r + 512;
+            im_a_w = fb_a_r;
+            im_wen_w = 0;
+            im_d_w[23:16] = ({2'b00, reg_128_r[23:16]} + {2'b00, IM_Q[23:16]}) >> 1;
+            im_d_w[15: 8] = ({2'b00, reg_128_r[15: 8]} + {2'b00, IM_Q[15: 8]}) >> 1;
+            im_d_w[ 7: 0] = ({2'b00, reg_128_r[ 7: 0]} + {2'b00, IM_Q[ 7: 0]}) >> 1;
+          end else begin // cnt_r == 127
+            im_a_w = fb_a_r;
+            im_wen_w = 0;
+            im_d_w = reg_128_r;
+            ph_a_w = ph_addr_r + iter_r + 1;
+            fb_a_w = fb_addr_r + ((iter_r + 1) << 1) + 256;
+            iter_w = iter_r + 1;
+            cnt_w = 0;
+          end
+        end else if (s_cnt_r == 4) begin 
+          s_cnt_w = 1;
+          im_a_w = ph_a_r;
+          im_wen_w = 1;
+        end
+      end 
+    end
+
     S_128A: begin
+      if (iter_r >= 128) begin
+        state_w = S_DCLK2;
+        iter_w = 0;
+        s_cnt_w = 0;
+        cnt_w = 0;
+        im_wen_w = 1;
+        cr_idx_w = 0;
+        cr_row_w = 0;
+        cr_col_w = 0;
+      end else if (iter_r == 127) begin
+        s_cnt_w = s_cnt_r + 1;
+        if (s_cnt_r == 0) begin
+          im_a_w = ph_a_r;
+          im_wen_w = 1;
+          cnt_w = 0;
+        end else if (s_cnt_r == 1) begin
+          im_a_w = ph_a_r + 1;
+          im_wen_w = 1;
+        end else if (s_cnt_r == 2) begin
+          reg_128_1_w = IM_Q;
+          im_wen_w = 1;
+        end else if (s_cnt_r == 3) begin
+          im_a_w = fb_a_r;
+          im_wen_w = 0;
+          im_d_w = reg_128_1_r;
+          reg_128_2_w = IM_Q;
+        end else if (s_cnt_r == 4) begin
+          im_a_w = fb_a_r + 2;
+          im_wen_w = 0;
+          im_d_w = reg_128_2_r;
+        end else if (s_cnt_r == 5) begin 
+          cnt_w = cnt_r + 1;
+          if (cnt_r < 126) begin
+            im_a_w = fb_a_r + 257;
+            im_wen_w = 0;
+            im_d_w[23:16] = ( {2'b00, reg_128_1_r[23:16]} + {2'b00, reg_128_2_r[23:16]} ) >> 1;
+            im_d_w[15: 8] = ( {2'b00, reg_128_1_r[15: 8]} + {2'b00, reg_128_2_r[15: 8]} ) >> 1;
+            im_d_w[ 7: 0] = ( {2'b00, reg_128_1_r[ 7: 0]} + {2'b00, reg_128_2_r[ 7: 0]} ) >> 1;
+            reg_128_1_w = reg_128_2_r;
+            ph_a_w = ph_a_r + 1;
+            fb_a_w = fb_a_r + 2;
+          end else begin
+            im_a_w = fb_a_r + 257;
+            im_wen_w = 0;
+            im_d_w = reg_128_1_r;
+            iter_w = iter_r + 1; // must be 128 = 127 + 1
+          end 
+        end else if (s_cnt_r == 6) begin
+          im_a_w = ph_a_r + 1;
+          im_wen_w = 1;
+        end else if (s_cnt_r == 7) begin
+          im_a_w = ph_a_r + 1;
+          im_wen_w = 1;
+          s_cnt_w = 3;
+        end 
+      end else begin 
+        s_cnt_w = s_cnt_r + 1;
+        if (s_cnt_r == 0) begin
+          im_a_w = ph_addr_r;
+          im_wen_w = 1;
+          ph_a_w = ph_addr_r;
+          fb_a_w = fb_addr_r;
+        end else if (s_cnt_r == 1) begin
+          im_a_w = ph_a_r + 128;
+          im_wen_w = 1;
+        end else if (s_cnt_r == 2) begin
+          im_a_w = ph_a_r + 1;
+          reg_128_1_w = IM_Q;
+          im_wen_w = 1;
+        end else if (s_cnt_r == 3) begin
+          im_a_w = ph_a_r + 129;
+          reg_128_3_w = IM_Q;
+          im_wen_w = 1;
+        end else if (s_cnt_r == 4) begin
+          reg_128_2_w = IM_Q;
+        end else if (s_cnt_r == 5) begin
+          reg_128_4_w = IM_Q;
+          im_a_w = fb_a_r;
+          im_wen_w = 0;
+          im_d_w = reg_128_1_r;
+        end else if (s_cnt_r == 6) begin 
+          cnt_w = cnt_r + 1;
+          if (cnt_r < 127) begin
+            im_a_w = fb_a_r + 257;
+            im_wen_w = 0;
+            im_d_w[23:16] = ( ({2'b00, reg_128_1_r[23:16]} + {2'b00, reg_128_2_r[23:16]}) 
+                            + ({2'b00, reg_128_3_r[23:16]} + {2'b00, IM_Q[23:16]}) ) >> 2;
+            im_d_w[15: 8] = ( ({2'b00, reg_128_1_r[15: 8]} + {2'b00, reg_128_2_r[15: 8]}) 
+                            + ({2'b00, reg_128_3_r[15: 8]} + {2'b00, IM_Q[15: 8]}) ) >> 2;
+            im_d_w[ 7: 0] = ( ({2'b00, reg_128_1_r[ 7: 0]} + {2'b00, reg_128_2_r[ 7: 0]}) 
+                            + ({2'b00, reg_128_3_r[ 7: 0]} + {2'b00, IM_Q[ 7: 0]}) ) >> 2;
+            ph_a_w = ph_a_r + 1;
+            fb_a_w = fb_a_r + 2;
+            reg_128_1_w = reg_128_2_r;
+            reg_128_3_w = IM_Q;
+          end else begin
+            im_a_w = fb_a_r + 257;
+            im_wen_w = 0;
+            im_d_w[23:16] = ( {2'b00, reg_128_1_r[23:16]} + {2'b00, reg_128_3_r[23:16]} ) >> 1;
+            im_d_w[15: 8] = ( {2'b00, reg_128_1_r[15: 8]} + {2'b00, reg_128_3_r[15: 8]} ) >> 1;
+            im_d_w[ 7: 0] = ( {2'b00, reg_128_1_r[ 7: 0]} + {2'b00, reg_128_3_r[ 7: 0]} ) >> 1;
+            ph_a_w = ph_a_r + 1;
+            fb_a_w = fb_addr_r + ((iter_r + 1) << 9);
+            iter_w = iter_r + 1;
+            cnt_w = 0;
+            s_cnt_w = 9;
+            if (iter_r == 127) s_cnt_w = 0;
+          end
+        end else if (s_cnt_r == 7) begin
+          im_a_w = ph_a_r + 1;
+          im_wen_w = 1;
+        end else if (s_cnt_r == 8) begin
+          s_cnt_w = 4;
+          im_a_w = ph_a_r + 129;
+          im_wen_w = 1;
+        end else if (s_cnt_r == 9) begin
+          s_cnt_w = 1;
+          im_a_w = ph_a_r;
+          im_wen_w = 1;
+        end
+      end 
     end
 
     //////////////////////////////
@@ -638,6 +874,14 @@ always @ (posedge clk or posedge reset) begin
     sum_512r_r    <= 0;
     sum_512g_r    <= 0;
     sum_512b_r    <= 0;
+    reg_128_r     <= 0;
+    reg_128_1_r   <= 0;
+    reg_128_2_r   <= 0;
+    reg_128_3_r   <= 0;
+    reg_128_4_r   <= 0;
+    reg_128r_r    <= 0;
+    reg_128g_r    <= 0;
+    reg_128b_r    <= 0;
   end else begin
     cnt_r         <= cnt_w;
     fb_addr_r     <= fb_addr_w;
@@ -660,6 +904,14 @@ always @ (posedge clk or posedge reset) begin
     sum_512r_r    <= sum_512r_w;
     sum_512g_r    <= sum_512g_w;
     sum_512b_r    <= sum_512b_w;
+    reg_128_r     <= reg_128_w;
+    reg_128_1_r   <= reg_128_1_w;
+    reg_128_2_r   <= reg_128_2_w;
+    reg_128_3_r   <= reg_128_3_w;
+    reg_128_4_r   <= reg_128_4_w;
+    reg_128r_r    <= reg_128r_w;
+    reg_128g_r    <= reg_128g_w;
+    reg_128b_r    <= reg_128b_w;
   end
 end
 
