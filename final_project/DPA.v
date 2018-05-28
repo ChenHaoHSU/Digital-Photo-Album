@@ -45,7 +45,6 @@ reg [1:0]  type_r, type_w;        // 0: 128; 1: 256; 2: 512;
 reg [19:0] ph_addr_r, ph_addr_w;
 reg [31:0] cnt_r, cnt_w;
 reg [31:0] ph_cnt_r, ph_cnt_w;    // current photo idx
-reg [31:0] px_cnt_r, px_cnt_w;    // current pixel idx
 reg [19:0] im_a_r, im_a_w;
 reg [23:0] im_d_r, im_d_w;
 reg        im_wen_r, im_wen_w;
@@ -72,9 +71,6 @@ reg [23:0] reg_128_1_r, reg_128_1_w; //    1  |  2
 reg [23:0] reg_128_2_r, reg_128_2_w; //  -----------               
 reg [23:0] reg_128_3_r, reg_128_3_w; //    3  |  4  
 reg [23:0] reg_128_4_r, reg_128_4_w; //
-reg [7:0]  reg_128r_r, reg_128r_w;    
-reg [7:0]  reg_128g_r, reg_128g_w;    
-reg [7:0]  reg_128b_r, reg_128b_w;    
  
 assign #10 IM_A   = im_a_r;
 assign #10 IM_D   = im_d_r;
@@ -89,7 +85,6 @@ always @ (*) begin
   ph_addr_w    = ph_addr_r;
   cnt_w        = cnt_r;
   ph_cnt_w     = ph_cnt_r;
-  px_cnt_w     = px_cnt_r;
   im_a_w       = im_a_r;
   im_d_w       = im_d_r;
   im_wen_w     = im_wen_r;
@@ -112,9 +107,6 @@ always @ (*) begin
   reg_128_2_w  = reg_128_2_r;
   reg_128_3_w  = reg_128_3_r;
   reg_128_4_w  = reg_128_4_r;
-  reg_128r_w   = reg_128r_r;
-  reg_128g_w   = reg_128g_r;
-  reg_128b_w   = reg_128b_r;
 
   hr_w  = hr_r;
   min_w = min_r;
@@ -134,7 +126,6 @@ always @ (*) begin
   if (hr_r >= 24) begin
     hr_w = 0;
   end
-
 
   case (state_r)
     //////////////////////////////
@@ -351,7 +342,6 @@ always @ (*) begin
     S_128BV: begin
       if (iter_r >= 128) begin
         state_w = S_DCLK1;
-        // state_w = S_DCLK2; // rm
         iter_w = 0;
         s_cnt_w = 0;
         cnt_w = 0;
@@ -860,7 +850,6 @@ always @ (posedge clk or posedge reset) begin
     type_r        <= 0;
     state_r       <= S_INIT;
     ph_cnt_r      <= 0;
-    px_cnt_r      <= 0;
     iter_r        <= 0;
     fb_a_r        <= 0;
     ph_a_r        <= 0;
@@ -879,9 +868,6 @@ always @ (posedge clk or posedge reset) begin
     reg_128_2_r   <= 0;
     reg_128_3_r   <= 0;
     reg_128_4_r   <= 0;
-    reg_128r_r    <= 0;
-    reg_128g_r    <= 0;
-    reg_128b_r    <= 0;
   end else begin
     cnt_r         <= cnt_w;
     fb_addr_r     <= fb_addr_w;
@@ -890,7 +876,6 @@ always @ (posedge clk or posedge reset) begin
     type_r        <= type_w;
     state_r       <= state_w;
     ph_cnt_r      <= ph_cnt_w;
-    px_cnt_r      <= px_cnt_w;
     iter_r        <= iter_w;
     fb_a_r        <= fb_a_w;
     ph_a_r        <= ph_a_w;
@@ -909,9 +894,6 @@ always @ (posedge clk or posedge reset) begin
     reg_128_2_r   <= reg_128_2_w;
     reg_128_3_r   <= reg_128_3_w;
     reg_128_4_r   <= reg_128_4_w;
-    reg_128r_r    <= reg_128r_w;
-    reg_128g_r    <= reg_128g_w;
-    reg_128b_r    <= reg_128b_w;
   end
 end
 
