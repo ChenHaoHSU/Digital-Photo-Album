@@ -197,9 +197,6 @@ always @ (*) begin
         s_cnt_w = 0;
         cnt_w = 0;
         im_wen_w = 1;
-        cr_idx_w = 0;
-        cr_row_w = 0;
-        cr_col_w = 0;
       end else begin
         s_cnt_w = s_cnt_r + 1;
         if (s_cnt_r == 0) begin
@@ -245,9 +242,6 @@ always @ (*) begin
         s_cnt_w = 0;
         cnt_w = 0;
         im_wen_w = 1;
-        cr_idx_w = 0;
-        cr_row_w = 0;
-        cr_col_w = 0;
       end else begin
         s_cnt_w = s_cnt_r + 1;
         if (s_cnt_r == 0) begin
@@ -344,9 +338,6 @@ always @ (*) begin
         s_cnt_w = 0;
         cnt_w = 0;
         im_wen_w = 1;
-        cr_idx_w = 0;
-        cr_row_w = 0;
-        cr_col_w = 0;
       end else begin 
         s_cnt_w = s_cnt_r + 1;
         if (s_cnt_r == 0) begin
@@ -396,9 +387,6 @@ always @ (*) begin
         s_cnt_w = 0;
         cnt_w = 0;
         im_wen_w = 1;
-        cr_idx_w = 0;
-        cr_row_w = 0;
-        cr_col_w = 0;
       end else if (iter_r == 127) begin
         s_cnt_w = s_cnt_r + 1;
         if (s_cnt_r == 0) begin
@@ -523,9 +511,6 @@ always @ (*) begin
         s_cnt_w = 0;
         cnt_w = 0;
         im_wen_w = 1;
-        cr_idx_w = 0;
-        cr_row_w = 0;
-        cr_col_w = 0;
       end else begin
         s_cnt_w = s_cnt_r + 1;
         if (s_cnt_r == 0) begin
@@ -594,9 +579,6 @@ always @ (*) begin
         s_cnt_w = 0;
         cnt_w = 0;
         im_wen_w = 1;
-        cr_idx_w = 0;
-        cr_row_w = 0;
-        cr_col_w = 0;
       end else begin
         s_cnt_w = s_cnt_r + 1;
         if (s_cnt_r == 0) begin
