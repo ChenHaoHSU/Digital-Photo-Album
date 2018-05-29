@@ -44,32 +44,32 @@ parameter [1:0] S_DCLK3 = 2'b10;
 reg [21:0] cycle_cnt_r, cycle_cnt_w;
 reg [19:0] fb_addr_r, fb_addr_w;
 reg [2:0]  ph_num_r, ph_num_w;
-reg [3:0]  state_r, state_w;
-reg [1:0]  type_r, type_w;        // 0: 128; 1: 256; 2: 512;
+reg [1:0]  type_r, type_w;             // 0: 128; 1: 256; 2: 512;
 reg [19:0] ph_addr_r, ph_addr_w;
-reg [15:0] cnt_r, cnt_w;
-reg [1:0]  ph_idx_r, ph_idx_w;    // current photo idx
-reg [19:0] im_a_r, im_a_w;
-reg [23:0] im_d_r, im_d_w;
-reg        im_wen_r, im_wen_w;
+reg [3:0]  state_r, state_w;
+reg [1:0]  dclk_state_r, dclk_state_w;
+reg [1:0]  ph_idx_r, ph_idx_w;         // current photo idx
 reg [15:0] iter_r, iter_w;
-reg [19:0] fb_a_r, fb_a_w;        // current write addr 
-reg [19:0] ph_a_r, ph_a_w;        // current photo addr
 reg [7:0]  s_cnt_r, s_cnt_w;
+reg [15:0] cnt_r, cnt_w;
+reg [19:0] fb_a_r, fb_a_w;             // current write addr 
+reg [19:0] ph_a_r, ph_a_w;             // current read addr
 reg [9:0]  sum_512r_r, sum_512r_w;
 reg [9:0]  sum_512g_r, sum_512g_w;
 reg [9:0]  sum_512b_r, sum_512b_w;
-reg [23:0] reg_128_1_r, reg_128_1_w; //    1  |  2   
-reg [23:0] reg_128_2_r, reg_128_2_w; //  -----------
-reg [23:0] reg_128_3_r, reg_128_3_w; //    3  |  4  
-reg [1:0]  dclk_state_r, dclk_state_w;
+reg [23:0] reg_128_1_r, reg_128_1_w;   //    1  |  2   
+reg [23:0] reg_128_2_r, reg_128_2_w;   //  -----------
+reg [23:0] reg_128_3_r, reg_128_3_w;   //    3  |  4  
+
+reg [19:0] im_a_r, im_a_w;
+reg [23:0] im_d_r, im_d_w;
+reg        im_wen_r, im_wen_w;
 
 reg [7:0]  hr_r, hr_w, min_r, min_w, sec_r, sec_w;
 reg [3:0]  h1, h0;
 reg [3:0]  m1, m0;
 reg [3:0]  s1, s0;
 reg [8:0]  cr_a_r, cr_a_w;
-reg [19:0] tm_a_r, tm_a_w;
 reg [4:0]  cr_idx_r, cr_idx_w;
 reg [3:0]  cr_col_r, cr_col_w;
 reg [4:0]  cr_row_r, cr_row_w;
@@ -97,9 +97,7 @@ always @ (*) begin
   fb_a_w       = fb_a_r;
   ph_a_w       = ph_a_r;
   s_cnt_w      = s_cnt_r;
-  {hr_w, min_w, sec_w} = {hr_r, min_r, sec_r};
   cr_a_w       = cr_a_r;
-  tm_a_w       = tm_a_r;
   cr_idx_w     = cr_idx_r;
   cr_col_w     = cr_col_r;
   cr_row_w     = cr_row_r;
@@ -169,6 +167,12 @@ always @ (*) begin
         ph_addr_w = IM_Q;
       end else if (cnt_r == 3) begin
         cnt_w = 0;
+        im_a_w = 0;
+        im_wen_w = 1;
+        ph_a_w = 0;
+        fb_a_w = fb_addr_r + 1;
+        iter_w = 0;
+        s_cnt_w = 0;
         if (IM_Q == 128) begin
           state_w = S_128BH;
           type_w = 0;
@@ -179,13 +183,6 @@ always @ (*) begin
           state_w = S_512B;
           type_w = 2;
         end
-        im_a_w = 0;
-        im_wen_w = 1;
-        fb_a_w = fb_addr_r + 1;
-        ph_a_w = 0;
-        iter_w = 0;
-        s_cnt_w = 0;
-        cnt_w = 0;
       end
     end
 
@@ -209,7 +206,6 @@ always @ (*) begin
           im_a_w = ph_addr_r + 1;
           ph_a_w = ph_addr_r + 1;
           fb_a_w = fb_addr_r + 1;
-        end else if (s_cnt_r == 1) begin
         end else if (s_cnt_r == 2) begin
           im_d_w = IM_Q;
           im_wen_w = 0;
@@ -258,7 +254,6 @@ always @ (*) begin
           im_a_w = ph_addr_r;
           ph_a_w = ph_addr_r;
           fb_a_w = fb_addr_r;
-        end else if (s_cnt_r == 1) begin
         end else if (s_cnt_r == 2) begin
           im_d_w = IM_Q;
           im_wen_w = 0;
@@ -715,17 +710,17 @@ always @ (*) begin
     //////////////////////////////
     S_WAIT1: begin
       if (cycle_cnt_r >= CYCLE_0_2) begin
+        im_a_w   = ph_addr_r;
         im_wen_w = 1;
-        im_a_w = ph_addr_r;
-        ph_a_w = ph_addr_r;
-        fb_a_w = fb_addr_r;
-        s_cnt_w = 0;
-        cnt_w = 0;
-        iter_w = 0;
+        ph_a_w   = ph_addr_r;
+        fb_a_w   = fb_addr_r;
+        iter_w   = 0;
+        s_cnt_w  = 0;
+        cnt_w    = 0;
         case(type_r)
-          2'b00: state_w = S_128A;
-          2'b01: state_w = S_256A;
-          2'b10: state_w = S_512A;
+          2'b00:   state_w = S_128A;
+          2'b01:   state_w = S_256A;
+          2'b10:   state_w = S_512A;
           default: state_w = S_256A;
         endcase
       end
@@ -733,14 +728,14 @@ always @ (*) begin
 
     S_WAIT2: begin
       if (cycle_cnt_r >= CYCLE_1_0 + 100) begin
-        state_w = S_DCLK;
+        state_w      = S_DCLK;
         dclk_state_w = S_DCLK3;
       end
     end
 
     S_WAIT3: begin
       if (cycle_cnt_r >= CYCLE_2_0 - 1) begin
-        state_w = S_TYPE;
+        state_w  = S_TYPE;
         ph_idx_w = (ph_idx_r >= ph_num_r - 1) ? 0 : ph_idx_r + 1;
       end
     end
@@ -748,7 +743,6 @@ always @ (*) begin
     default: begin 
     end
   endcase
-
 end
     
 always @ (posedge clk or posedge reset) begin
@@ -764,12 +758,6 @@ always @ (posedge clk or posedge reset) begin
     fb_a_r        <= 0;
     ph_a_r        <= 0;
     s_cnt_r       <= 0;
-    cr_a_r        <= 0;
-    tm_a_r        <= 0;
-    cr_idx_r      <= 0;
-    cr_col_r      <= 0;
-    cr_row_r      <= 0;
-    cr_state_r    <= 0;
     sum_512r_r    <= 0;
     sum_512g_r    <= 0;
     sum_512b_r    <= 0;
@@ -789,12 +777,6 @@ always @ (posedge clk or posedge reset) begin
     fb_a_r        <= fb_a_w;
     ph_a_r        <= ph_a_w;
     s_cnt_r       <= s_cnt_w;
-    cr_a_r        <= cr_a_w;
-    tm_a_r        <= tm_a_w;
-    cr_idx_r      <= cr_idx_w;
-    cr_col_r      <= cr_col_w;
-    cr_row_r      <= cr_row_w;
-    cr_state_r    <= cr_state_w;
     sum_512r_r    <= sum_512r_w;
     sum_512g_r    <= sum_512g_w;
     sum_512b_r    <= sum_512b_w;
@@ -814,6 +796,22 @@ always @ (posedge clk or posedge reset) begin
     im_a_r     <= im_a_w;
     im_d_r     <= im_d_w;
     im_wen_r   <= im_wen_w;
+  end
+end
+
+always @ (posedge clk or posedge reset) begin
+  if (reset) begin
+    cr_a_r        <= 0;
+    cr_idx_r      <= 0;
+    cr_col_r      <= 0;
+    cr_row_r      <= 0;
+    cr_state_r    <= 0;
+  end else begin
+    cr_a_r        <= cr_a_w;
+    cr_idx_r      <= cr_idx_w;
+    cr_col_r      <= cr_col_w;
+    cr_row_r      <= cr_row_w;
+    cr_state_r    <= cr_state_w;
   end
 end
 
@@ -837,14 +835,14 @@ end
 //////////////////////////////
 always @ (*) begin
   case (cr_idx_r) 
-    6'd0: cr_num = h1;
-    6'd1: cr_num = h0;
-    6'd2: cr_num = 10;
-    6'd3: cr_num = m1;
-    6'd4: cr_num = m0;
-    6'd5: cr_num = 10;
-    6'd6: cr_num = s1;
-    6'd7: cr_num = s0;
+    'd0: cr_num = h1;
+    'd1: cr_num = h0;
+    'd2: cr_num = 10;
+    'd3: cr_num = m1;
+    'd4: cr_num = m0;
+    'd5: cr_num = 10;
+    'd6: cr_num = s1;
+    'd7: cr_num = s0;
     default: cr_num = 0;
   endcase
 end 
