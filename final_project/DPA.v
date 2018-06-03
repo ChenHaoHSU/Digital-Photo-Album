@@ -9,11 +9,13 @@ output [8:0]  CR_A;
 input  [12:0] CR_Q;
 
 // Const
-parameter [31:0] CYCLE_0_2 = 32'd200000;
-parameter [31:0] CYCLE_0_4 = 32'd400000;
-parameter [31:0] CYCLE_1_0 = 32'd1000000;
-parameter [31:0] CYCLE_1_4 = 32'd1400000;
-parameter [31:0] CYCLE_2_0 = 32'd2000000;
+parameter [21:0] CYCLE_0_2 = 22'd200000;
+parameter [21:0] CYCLE_0_4 = 22'd400000;
+parameter [21:0] CYCLE_0_9 = 22'd999999;
+parameter [21:0] CYCLE_1_0 = 22'd1000000;
+parameter [21:0] CYCLE_1_4 = 22'd1400000;
+parameter [21:0] CYCLE_1_9 = 22'd1999999;
+parameter [21:0] CYCLE_2_0 = 22'd2000000;
 
 parameter AAA  = 1'b0;
 parameter BBB  = 1'b1;
@@ -30,19 +32,10 @@ parameter [3:0] S_TYPE  = 4'd01;
 parameter [3:0] S_128A  = 4'd02; // DO B, then do A (see spec)
 parameter [3:0] S_128BH = 4'd03; // DO B, then do A (see spec)
 parameter [3:0] S_128BV = 4'd04; // DO B, then do A (see spec)
-parameter [3:0] S_512A  = 4'd07; // DO B, then do A (see spec)
-parameter [3:0] S_512B  = 4'd08; // DO B, then do A (see spec)
-parameter [3:0] S_DCLK  = 4'd09;
-parameter [3:0] S_WAIT1 = 4'd10; // ~ 0.2 (Photo 1 & Photo 2)
-parameter [3:0] S_WAIT2 = 4'd11; // ~ 1.0 (Photo 2)
-parameter [3:0] S_WAIT3 = 4'd12; // ~ 2.0 (Photo 2)
-
-parameter [3:0] S_256   = 4'd13; // DO B, then do A (see spec)
-parameter [3:0] S_512   = 4'd14; // DO B, then do A (see spec)
-
-parameter [1:0] S_DCLK1 = 2'b00;
-parameter [1:0] S_DCLK2 = 2'b01;
-parameter [1:0] S_DCLK3 = 2'b10;
+parameter [3:0] S_256   = 4'd05; // DO B, then do A (see spec)
+parameter [3:0] S_512   = 4'd06; // DO B, then do A (see spec)
+parameter [3:0] S_DCLK  = 4'd07;
+parameter [3:0] S_WAIT  = 4'd08;
 
 // Signals
 reg [21:0] cycle_cnt_r, cycle_cnt_w;
@@ -51,7 +44,6 @@ reg [2:0]  ph_num_r, ph_num_w;
 reg [1:0]  type_r, type_w;             // 0: 128; 1: 256; 2: 512;
 reg [19:0] ph_addr_r, ph_addr_w;
 reg [3:0]  state_r, state_w;
-reg [1:0]  dclk_state_r, dclk_state_w;
 reg [1:0]  ph_idx_r, ph_idx_w;         // current photo idx
 reg [15:0] iter_r, iter_w;
 reg [7:0]  s_cnt_r, s_cnt_w;
@@ -61,9 +53,9 @@ reg [19:0] ph_a_r, ph_a_w;             // current read addr
 reg [9:0]  sum_512r_r, sum_512r_w;
 reg [9:0]  sum_512g_r, sum_512g_w;
 reg [9:0]  sum_512b_r, sum_512b_w;
-reg [23:0] reg_1_r, reg_1_w;   //    1  |  2   
-reg [23:0] reg_2_r, reg_2_w;   //  -----------
-reg [23:0] reg_3_r, reg_3_w;   //    3  |  4  
+reg [23:0] reg_1_r, reg_1_w;           //    1  |  2   
+reg [23:0] reg_2_r, reg_2_w;           //  -----------
+reg [23:0] reg_3_r, reg_3_w;           //    3  |  4  
 reg        ab_r, ab_w;                 // 0 for a; 1 for b;
 
 reg [19:0] im_a_r, im_a_w;
@@ -113,12 +105,11 @@ always @ (*) begin
   reg_1_w      = reg_1_r;
   reg_2_w      = reg_2_r;
   reg_3_w      = reg_3_r;
-  dclk_state_w = dclk_state_r;
   ab_w         = ab_r;
 
   hr_w  = hr_r;
   min_w = min_r;
-  if (cycle_cnt_r == CYCLE_1_0 - 1 || cycle_cnt_r == CYCLE_2_0 - 1) begin
+  if (cycle_cnt_r == CYCLE_0_9 || cycle_cnt_r == CYCLE_1_9) begin
     sec_w = sec_r + 1;
   end else begin
     sec_w = sec_r;
@@ -199,7 +190,6 @@ always @ (*) begin
     S_256: begin
       if (iter_r >= 256) begin
         state_w      = S_DCLK;
-        dclk_state_w = ab_r ? S_DCLK1 : S_DCLK2; // must become the same as its initial value
         iter_w       = 0;
         s_cnt_w      = 0;
         cnt_w        = 0;
@@ -274,7 +264,7 @@ always @ (*) begin
             im_wen_w = 0;
             im_d_w = reg_1_r;
             ph_a_w = ph_a_r + 1;
-            fb_a_w = fb_a_r + 256 + 2;
+            fb_a_w = fb_a_r + 258;
             iter_w = iter_r + 1;
             cnt_w = 0;
           end
@@ -289,7 +279,6 @@ always @ (*) begin
     S_128BV: begin
       if (iter_r >= 128) begin
         state_w = S_DCLK;
-        dclk_state_w = S_DCLK1;
         iter_w = 0;
         s_cnt_w = 0;
         cnt_w = 0;
@@ -313,11 +302,11 @@ always @ (*) begin
             reg_1_w = IM_Q;
             im_a_w = fb_a_r;
             im_wen_w = 0;
+            ph_a_w = ph_a_r + 128;
+            fb_a_w = fb_a_r + 512;
             im_d_w[23:16] = ({1'b0, reg_1_r[23:16]} + {1'b0, IM_Q[23:16]}) >> 1;
             im_d_w[15: 8] = ({1'b0, reg_1_r[15: 8]} + {1'b0, IM_Q[15: 8]}) >> 1;
             im_d_w[ 7: 0] = ({1'b0, reg_1_r[ 7: 0]} + {1'b0, IM_Q[ 7: 0]}) >> 1;
-            ph_a_w = ph_a_r + 128;
-            fb_a_w = fb_a_r + 512;
           end else begin // cnt_r == 127
             im_a_w = fb_a_r;
             im_wen_w = 0;
@@ -338,7 +327,6 @@ always @ (*) begin
     S_128A: begin
       if (iter_r >= 128) begin
         state_w = S_DCLK;
-        dclk_state_w = S_DCLK2;
         iter_w = 0;
         s_cnt_w = 0;
         cnt_w = 0;
@@ -462,7 +450,6 @@ always @ (*) begin
     S_512: begin
       if (iter_r >= 256) begin 
         state_w      = S_DCLK;
-        dclk_state_w = ab_r ? S_DCLK1 : S_DCLK2; // must become the same as its initial value
         iter_w       = 0;
         s_cnt_w      = 0;
         cnt_w        = 0;
@@ -562,19 +549,15 @@ always @ (*) begin
         cr_row_w = 0;
         cr_col_w = 0;
         cr_state_w = 0;
-        case(dclk_state_r)
-          S_DCLK1: state_w = S_WAIT1;
-          S_DCLK2: state_w = S_WAIT2;
-          S_DCLK3: state_w = S_WAIT3;
-        endcase
+        state_w = S_WAIT;
       end
     end
 
     //////////////////////////////
     // Wait
     //////////////////////////////
-    S_WAIT1: begin
-      if (cycle_cnt_r >= CYCLE_0_2) begin
+    S_WAIT: begin
+      if (cycle_cnt_r == CYCLE_0_2) begin
         im_a_w   = ph_addr_r;
         im_wen_w = 1;
         ph_a_w   = ph_addr_r;
@@ -589,18 +572,9 @@ always @ (*) begin
           2'b10:   state_w = S_512;
           default: state_w = S_256;
         endcase
-      end
-    end
-
-    S_WAIT2: begin
-      if (cycle_cnt_r >= CYCLE_1_0 + 100) begin
+      end else if (cycle_cnt_r == CYCLE_1_0 + 100) begin
         state_w      = S_DCLK;
-        dclk_state_w = S_DCLK3;
-      end
-    end
-
-    S_WAIT3: begin
-      if (cycle_cnt_r >= CYCLE_2_0 - 1) begin
+      end else if (cycle_cnt_r == CYCLE_1_9) begin
         state_w  = S_TYPE;
         ph_idx_w = (ph_idx_r >= ph_num_r - 1) ? 0 : ph_idx_r + 1;
       end
@@ -628,7 +602,6 @@ always @ (posedge clk or posedge reset) begin
     reg_1_r       <= 0;
     reg_2_r       <= 0;
     reg_3_r       <= 0;
-    dclk_state_r  <= S_DCLK1;
     ab_r          <= BBB;
   end else begin
     cnt_r         <= cnt_w;
@@ -648,7 +621,6 @@ always @ (posedge clk or posedge reset) begin
     reg_1_r       <= reg_1_w;
     reg_2_r       <= reg_2_w;
     reg_3_r       <= reg_3_w;
-    dclk_state_r  <= dclk_state_w;
     ab_r          <= ab_w;
   end
 end
@@ -685,7 +657,7 @@ end
 // Cycle Cnt
 //////////////////////////////
 always @ (*) begin
-  cycle_cnt_w = (cycle_cnt_r == CYCLE_2_0 - 1) ? 0 : cycle_cnt_r + 1;
+  cycle_cnt_w = (cycle_cnt_r == CYCLE_1_9) ? 0 : cycle_cnt_r + 1;
 end
 
 always @ (posedge clk or posedge reset) begin
@@ -701,14 +673,14 @@ end
 //////////////////////////////
 always @ (*) begin
   case (cr_idx_r) 
-    'd0: cr_num = h1;
-    'd1: cr_num = h0;
-    'd2: cr_num = 10;
-    'd3: cr_num = m1;
-    'd4: cr_num = m0;
-    'd5: cr_num = 10;
-    'd6: cr_num = s1;
-    'd7: cr_num = s0;
+    4'd0: cr_num = h1;
+    4'd1: cr_num = h0;
+    4'd2: cr_num = 10;
+    4'd3: cr_num = m1;
+    4'd4: cr_num = m0;
+    4'd5: cr_num = 10;
+    4'd6: cr_num = s1;
+    4'd7: cr_num = s0;
     default: cr_num = 0;
   endcase
 end 
